@@ -22,6 +22,7 @@ import (
 	"github.com/jpillora/requestlog"
 	"github.com/jpillora/scraper/scraper"
 	"github.com/jpillora/velox"
+	veloxgo "github.com/jpillora/velox/go"
 	"github.com/skratchdot/open-golang/open"
 )
 
@@ -71,6 +72,9 @@ func (s *Server) Run(version string) error {
 	s.state.Stats.Version = version
 	s.state.Stats.Runtime = strings.TrimPrefix(runtime.Version(), "go")
 	s.state.Stats.Uptime = time.Now()
+	//velox.Sync creates a fresh State per connection, so we must
+	//give the embedded State a data source and serve /sync from it
+	s.state.State.Data = veloxgo.Marshal(&s.state)
 	s.state.Stats.System.pusher = velox.Pusher(&s.state)
 	//init maps
 	s.state.Users = map[string]string{}
@@ -214,7 +218,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	}
 	//handle realtime client connections
 	if r.URL.Path == "/sync" {
-		conn, err := velox.Sync(&s.state, w, r)
+		conn, err := s.state.State.Handle(w, r)
 		if err != nil {
 			log.Printf("sync failed: %s", err)
 			return
